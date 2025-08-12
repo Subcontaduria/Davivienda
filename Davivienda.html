@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Extractor de Extractos Davivienda</title>
+    <meta name="description" content="Extrae y analiza transacciones de extractos bancarios de Davivienda en formato PDF, convirtiéndolos a formato CSV de forma local y segura, sin necesidad de una clave API.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'brand-primary': '#0D1117',
+                        'brand-secondary': '#161B22',
+                        'brand-border': '#30363D',
+                        'brand-accent': '#2F81F7',
+                        'brand-accent-hover': '#58A6FF',
+                        'brand-text-primary': '#E6EDF3',
+                        'brand-text-secondary': '#8B949E',
+                        'brand-success': '#238636',
+                        'brand-danger': '#DA3633',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Roboto Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.1.1",
+    "react/": "https://esm.sh/react@^19.1.1/",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "pdfjs-dist": "https://esm.sh/pdfjs-dist@^5.4.54"
+  }
+}
+</script>
+</head>
+<body class="bg-brand-primary text-brand-text-primary">
+<div id="root"></div>
+
+<script type="module">
+    import React, { useState, useCallback } from 'https://esm.sh/react@18.3.1';
+    import ReactDOM from 'https://esm.sh/react-dom@18.3.1/client';
+    import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.5.136/build/pdf.mjs';
+
+    // --- TYPES ---
+    // from types.ts
+    
+    // --- ICONS ---
+    // from components/icons.tsx
+    const DocumentArrowUpIcon = (props) => (
+        React.createElement('svg', { ...props, xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor" },
+            React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" })
+        )
+    );
+    const DocumentIcon = (props) => (
+        React.createElement('svg', { ...props, xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor" },
+            React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m-1.5 0-3.75 3.75m3.75-3.75V8.25m0 12H5.625c-.621 0-1.125.504-1.125 1.125v-17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V13.5m-3 0V6" })
+        )
+    );
+    const XCircleIcon = (props) => (
+        React.createElement('svg', { ...props, xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor" },
+            React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" })
+        )
+    );
+    const TableCellsIcon = (props) => (
+        React.createElement('svg', { ...props, xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor" },
+          React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125v-1.5c0-.621.504-1.125 1.125-1.125h17.25c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0v-1.5m17.25 1.5v-1.5m-17.25-9h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125v-1.5c0-.621.504-1.125 1.125-1.125h17.25c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0v-1.5m17.25 1.5v-1.5M5.625 4.5h12.75a1.125 1.125 0 0 1 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125H5.625a1.125 1.125 0 0 1-1.125-1.125v-1.5c0-.621.504-1.125 1.125-1.125Z" })
+        )
+    );
+
+    // --- HOOKS ---
+    // from hooks/usePdfProcessor.ts
+    const usePdfProcessor = () => {
+        const [transactions, setTransactions] = useState([]);
+        const [isLoading, setIsLoading] = useState(false);
+        const [error, setError] = useState(null);
+        const [progress, setProgress] = useState(null);
+
+        const reset = useCallback(() => {
+            setTransactions([]);
+            setIsLoading(false);
+            setError(null);
+            setProgress(null);
+        }, []);
+        
+        const parseFlexibleNumber = (numStr) => {
+            if (!numStr) return NaN;
+            const cleaned = numStr.trim().replace(/[^\d,.-]/g, '');
+            const lastComma = cleaned.lastIndexOf(',');
+            const lastDot = cleaned.lastIndexOf('.');
+
+            if (lastComma > lastDot) {
+                return parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
+            }
+            return parseFloat(cleaned.replace(/,/g, ''));
+        };
+
+        const parseTextContent = (lines) => {
+            const parsedTransactions = [];
+            console.log("--- INICIO DE PROCESAMIENTO DE LÍNEAS RECONSTRUIDAS ---");
+
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                const match = trimmedLine.match(/^(\d{1,2})\s+(\d{1,2})\s+(.+?)\s+([$]?[\d.,]+[-+]?)\s+([$]?[\d.,]+[-+]?)$/);
+
+                if (!match) {
+                     console.log(`DEBUG: Línea omitida (no coincide con el patrón): "${trimmedLine}"`);
+                    continue;
+                }
+
+                try {
+                    const [, dia, mes, descripcion, movimientoStr, saldoStr] = match;
+
+                    let movimientoNum = parseFlexibleNumber(movimientoStr);
+                    if (movimientoStr.trim().endsWith('-')) {
+                        movimientoNum = -Math.abs(movimientoNum);
+                    }
+
+                    const saldoNum = parseFlexibleNumber(saldoStr);
+
+                    if (isNaN(movimientoNum) || isNaN(saldoNum)) {
+                        console.log(`DEBUG: Línea omitida (valores no numéricos): "${trimmedLine}"`);
+                        continue;
+                    }
+                    
+                    const fecha = `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/2025`;
+
+                    parsedTransactions.push({
+                        fecha: fecha,
+                        descripcion: descripcion.replace(/\s+/g, ' ').trim(),
+                        movimiento: movimientoNum,
+                        saldo: saldoNum,
+                    });
+
+                } catch (e) {
+                    console.warn(`Error procesando línea: "${trimmedLine}"`, e);
+                }
+            }
+            console.log("--- FIN DE PROCESAMIENTO DE LÍNEAS ---");
+            return parsedTransactions;
+        };
+        
+        const processPdf = useCallback(async (file) => {
+            reset();
+            setIsLoading(true);
+
+            try {
+                const data = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data }).promise;
+                const numPages = pdf.numPages;
+                setProgress({ processed: 0, total: numPages });
+
+                let allTransactions = [];
+                
+                for (let i = 1; i <= numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    
+                    const items = textContent.items.filter((item) => 'str' in item && item.str.trim().length > 0);
+                    
+                    const linesMap = new Map();
+                    for (const item of items) {
+                        const y = Math.round(item.transform[5]); 
+                        if (!linesMap.has(y)) {
+                            linesMap.set(y, []);
+                        }
+                        linesMap.get(y).push(item);
+                    }
+
+                    const sortedY = Array.from(linesMap.keys()).sort((a, b) => b - a);
+                    
+                    const reconstructedLines = [];
+                    for (const y of sortedY) {
+                        const lineItems = linesMap.get(y);
+                        lineItems.sort((a, b) => a.transform[4] - b.transform[4]);
+                        reconstructedLines.push(lineItems.map(item => item.str).join(' '));
+                    }
+                    
+                    console.log(`--- DEBUG: Texto Reconstruido por Coordenadas (Página ${i}) ---`);
+                    console.log(reconstructedLines.join('\n'));
+                    console.log(`--- FIN DEBUG ---`);
+                    
+                    const pageTransactions = parseTextContent(reconstructedLines);
+                    allTransactions = [...allTransactions, ...pageTransactions];
+                    
+                    setProgress({ processed: i, total: numPages });
+                }
+                
+                if (allTransactions.length === 0) {
+                     setError("No se encontraron transacciones en el formato esperado. Verifique que el PDF sea un extracto de Davivienda válido.");
+                } else {
+                    setTransactions(allTransactions);
+                }
+
+            } catch (err) {
+                console.error("Error procesando PDF:", err);
+                const message = err instanceof Error ? err.message : "Ocurrió un error desconocido.";
+                setError(`Fallo al procesar el PDF: ${message}. Asegúrese de que es un archivo válido y no está corrupto.`);
+            } finally {
+                setIsLoading(false);
+            }
+        }, [reset]);
+
+        return { transactions, isLoading, error, progress, processPdf, reset };
+    };
+
+    // --- COMPONENTS ---
+    // from components/Spinner.tsx
+    const Spinner = ({ progress }) => {
+        const percentage = progress && progress.total > 0
+            ? Math.round((progress.processed / progress.total) * 100)
+            : 0;
+
+        return React.createElement('div', { className: "w-full max-w-lg mx-auto my-8" },
+            React.createElement('div', { className: "flex justify-center items-center py-4" },
+                React.createElement('svg', { className: "animate-spin h-10 w-10 text-brand-accent", xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24" },
+                    React.createElement('circle', { className: "opacity-25", cx: "12", cy: "12", r: "10", stroke: "currentColor", strokeWidth: "4" }),
+                    React.createElement('path', { className: "opacity-75", fill: "currentColor", d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" })
+                ),
+                React.createElement('p', { className: "ml-4 text-brand-text-primary text-lg" },
+                    progress && progress.total > 0 ? `Analizando... (pág. ${progress.processed} de ${progress.total})` : 'Preparando Documento...'
+                )
+            ),
+            React.createElement('div', { className: "w-full bg-brand-secondary rounded-full h-2.5 border border-brand-border" },
+                React.createElement('div', {
+                    className: "bg-brand-accent h-2 rounded-full transition-all duration-300",
+                    style: { width: `${percentage}%` }
+                })
+            )
+        );
+    };
+
+    // from components/TransactionTable.tsx
+    const TransactionTable = ({ transactions }) => {
+        const formatNumber = (num) => {
+            return num.toLocaleString('es-CO', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
+        };
+
+        return React.createElement('div', { className: "w-full bg-brand-secondary rounded-lg shadow-lg border border-brand-border overflow-hidden" },
+            React.createElement('div', { className: "overflow-x-auto" },
+                React.createElement('table', { className: "w-full text-left min-w-[700px]" },
+                    React.createElement('thead', { className: "bg-gray-800/50" },
+                        React.createElement('tr', null,
+                            React.createElement('th', { className: "px-6 py-4 text-sm font-medium text-brand-text-secondary uppercase tracking-wider" }, "Fecha"),
+                            React.createElement('th', { className: "px-6 py-4 text-sm font-medium text-brand-text-secondary uppercase tracking-wider" }, "Descripción"),
+                            React.createElement('th', { className: "px-6 py-4 text-sm font-medium text-brand-text-secondary uppercase tracking-wider text-right" }, "Movimiento"),
+                            React.createElement('th', { className: "px-6 py-4 text-sm font-medium text-brand-text-secondary uppercase tracking-wider text-right" }, "Saldo")
+                        )
+                    ),
+                    React.createElement('tbody', { className: "divide-y divide-brand-border" },
+                        transactions.map((tx, index) => (
+                            React.createElement('tr', { key: index, className: "hover:bg-gray-700/30 transition-colors duration-200" },
+                                React.createElement('td', { className: "px-6 py-4 whitespace-nowrap text-brand-text-secondary font-mono text-sm" }, tx.fecha),
+                                React.createElement('td', { className: "px-6 py-4 text-brand-text-primary text-sm" }, tx.descripcion),
+                                React.createElement('td', {
+                                    className: `px-6 py-4 whitespace-nowrap text-right font-mono text-sm ${tx.movimiento < 0 ? 'text-red-400' : 'text-green-400'}`
+                                }, formatNumber(tx.movimiento)),
+                                React.createElement('td', { className: "px-6 py-4 whitespace-nowrap text-right font-mono text-brand-text-primary text-sm" }, formatNumber(tx.saldo))
+                            )
+                        ))
+                    )
+                )
+            )
+        );
+    };
+
+    // from components/ResultDisplay.tsx
+    const ResultDisplay = ({ error, isLoading, hasTransactions, children }) => {
+        if (error) {
+            return React.createElement('div', { className: "w-full max-w-3xl mx-auto p-4 bg-red-900/50 border border-brand-danger text-red-200 rounded-lg flex items-center gap-4" },
+                React.createElement(XCircleIcon, { className: "w-6 h-6 flex-shrink-0" }),
+                React.createElement('div', null,
+                    React.createElement('h4', { className: "font-bold" }, "Fallo en la Extracción"),
+                    React.createElement('p', { className: "text-sm" }, error)
+                )
+            );
+        }
+        
+        if (!isLoading && hasTransactions) {
+            return React.createElement(React.Fragment, null, children);
+        }
+
+        return null;
+    };
+
+    // from components/FileUpload.tsx
+    const FileUpload = ({ onFileSelect, selectedFile, onClear }) => {
+        const [isDragging, setIsDragging] = useState(false);
+
+        const handleDragEnter = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
+        const handleDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
+        const handleDragOver = (e) => { e.preventDefault(); e.stopPropagation(); };
+
+        const handleDrop = useCallback((e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDragging(false);
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                onFileSelect(e.dataTransfer.files[0]);
+            }
+        }, [onFileSelect]);
+
+        const handleFileChange = (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                onFileSelect(e.target.files[0]);
+                e.target.value = '';
+            }
+        };
+        
+        if (selectedFile) {
+            return React.createElement('div', { className: "w-full p-4 border-2 border-dashed border-brand-border rounded-xl bg-brand-secondary flex items-center justify-between" },
+                React.createElement('div', { className: "flex items-center gap-3" },
+                    React.createElement(DocumentIcon, { className: "w-8 h-8 text-brand-accent" }),
+                    React.createElement('span', { className: "text-brand-text-primary font-medium" }, selectedFile.name)
+                ),
+                React.createElement('button', { onClick: onClear, className: "text-brand-text-secondary hover:text-brand-text-primary transition-colors" },
+                    React.createElement(XCircleIcon, { className: "w-6 h-6" })
+                )
+            );
+        }
+
+        return React.createElement('div', {
+                className: `relative w-full p-8 border-2 border-dashed rounded-xl transition-colors duration-300 ${isDragging ? 'border-brand-accent bg-brand-secondary' : 'border-brand-border hover:border-brand-accent'}`,
+                onDragEnter: handleDragEnter, onDragLeave: handleDragLeave, onDragOver: handleDragOver, onDrop: handleDrop
+            },
+            React.createElement('input', {
+                type: "file", id: "file-upload", className: "absolute inset-0 w-full h-full opacity-0 cursor-pointer",
+                onChange: handleFileChange, accept: ".pdf"
+            }),
+            React.createElement('label', { htmlFor: "file-upload", className: "flex flex-col items-center justify-center text-center cursor-pointer" },
+                React.createElement(DocumentArrowUpIcon, { className: "w-16 h-16 mx-auto text-brand-text-secondary transition-colors duration-300" }),
+                React.createElement('h3', { className: "mt-4 text-xl font-semibold text-brand-text-primary" }, "Arrastra y suelta tu PDF aquí"),
+                React.createElement('p', { className: "mt-1 text-brand-text-secondary" }, "o haz clic para buscar")
+            )
+        );
+    };
+
+    // --- MAIN APP COMPONENT ---
+    // from App.tsx
+    const App = () => {
+        const [file, setFile] = useState(null);
+        const {
+            transactions,
+            isLoading,
+            error,
+            progress,
+            processPdf,
+            reset,
+        } = usePdfProcessor();
+
+        const handleFileSelect = useCallback((selectedFile) => {
+            if (selectedFile.type !== 'application/pdf') {
+                reset();
+                setFile(null);
+            } else {
+                setFile(selectedFile);
+                reset();
+            }
+        }, [reset]);
+
+        const handleExtractData = async () => {
+            if (!file) return;
+            await processPdf(file);
+        };
+
+        const formatNumberForCsv = (num) => {
+            const parts = num.toFixed(2).split('.');
+            const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            return `${integerPart},${parts[1]}`;
+        };
+
+        const convertToCSV = (data) => {
+            const headers = ['Fecha', 'Descripcion', 'Movimiento', 'Saldo'];
+            const rows = data.map(tx => {
+                const description = `"${tx.descripcion.replace(/"/g, '""')}"`;
+                const movimiento = formatNumberForCsv(tx.movimiento);
+                const saldo = formatNumberForCsv(tx.saldo);
+                return [tx.fecha, description, movimiento, saldo].join('|');
+            });
+            return [headers.join('|'), ...rows].join('\n');
+        };
+
+        const downloadCSV = (csvData, filename) => {
+            const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        };
+
+        const handleExport = useCallback(() => {
+            if (transactions.length > 0 && file) {
+                const csvData = convertToCSV(transactions);
+                const originalFilename = file.name.replace(/\.[^/.]+$/, "") || "transacciones";
+                downloadCSV(csvData, `${originalFilename}.csv`);
+            }
+        }, [transactions, file]);
+
+        return React.createElement('div', { className: "min-h-screen p-4 sm:p-8 flex flex-col items-center antialiased" },
+            React.createElement('header', { className: "w-full max-w-4xl mx-auto text-center mb-10" },
+                React.createElement('h1', { className: "text-4xl sm:text-5xl font-bold tracking-tight text-brand-text-primary" }, "Extractor de Extractos Davivienda"),
+                React.createElement('p', { className: "mt-3 text-lg text-brand-text-secondary" }, "Extrae datos de tus extractos PDF de Davivienda de forma local y segura.")
+            ),
+            React.createElement('main', { className: "w-full max-w-3xl mx-auto flex flex-col items-center gap-6" },
+                React.createElement(FileUpload, { onFileSelect: handleFileSelect, selectedFile: file, onClear: () => { setFile(null); reset(); }}),
+                React.createElement('button', {
+                    onClick: handleExtractData,
+                    disabled: !file || isLoading,
+                    className: "w-full max-w-xs px-8 py-3 bg-brand-accent text-white font-semibold rounded-lg shadow-md hover:bg-brand-accent-hover disabled:bg-brand-border disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75"
+                }, isLoading ? 'Analizando...' : 'Extraer Transacciones')
+            ),
+            React.createElement('section', { className: "w-full max-w-6xl mx-auto mt-12" },
+                isLoading && React.createElement(Spinner, { progress }),
+                React.createElement(ResultDisplay, { error, hasTransactions: transactions.length > 0, isLoading },
+                   React.createElement(React.Fragment, null,
+                       React.createElement('div', { className: "w-full mb-4 flex justify-between items-center" },
+                           React.createElement('h3', { className: "text-xl font-semibold text-brand-text-primary" }, "Transacciones Extraídas"),
+                           React.createElement('button', {
+                               onClick: handleExport,
+                               className: "px-4 py-2 bg-brand-success text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition-all duration-300 flex items-center gap-2"
+                           },
+                               React.createElement(TableCellsIcon, { className: "w-5 h-5" }),
+                               "Exportar como CSV"
+                           )
+                       ),
+                       React.createElement(TransactionTable, { transactions })
+                   )
+                ),
+                !isLoading && !error && transactions.length === 0 && (
+                    React.createElement('div', { className: "text-center text-brand-text-secondary mt-12" },
+                        React.createElement(DocumentIcon, { className: "w-20 h-20 mx-auto opacity-30" }),
+                        React.createElement('p', { className: "mt-4 text-lg" }, "Sube un extracto bancario para empezar."),
+                        React.createElement('p', null, "Tus transacciones extraídas aparecerán aquí.")
+                    )
+                )
+            )
+        );
+    };
+
+    // --- RENDER APP ---
+    // from index.tsx
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.5.136/build/pdf.worker.mjs';
+
+    const rootElement = document.getElementById('root');
+    if (!rootElement) {
+        throw new Error("Could not find root element to mount to");
+    }
+
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+        React.createElement(React.StrictMode, null,
+            React.createElement(App)
+        )
+    );
+</script>
+</body>
+</html>
